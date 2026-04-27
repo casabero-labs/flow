@@ -1,5 +1,5 @@
 """Pydantic schemas para requests/responses."""
-from app.schemas.user import UserCreate, UserOut, UserLogin
+from app.schemas.user import UserCreate, UserOut, UserLogin, TokenResponse
 from app.schemas.transaction import TransactionCreate, TransactionOut, TransactionUpdate
 from app.schemas.category import CategoryCreate, CategoryOut
 from app.schemas.account import AccountCreate, AccountOut

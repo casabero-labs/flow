@@ -1,31 +1,32 @@
 """Transactions API routes."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, extract
 from datetime import datetime
 
 from app.database import get_db
 from app.models.transaction import Transaction
-from app.models.category import Category
+from app.models.user import User
 from app.schemas.transaction import TransactionCreate, TransactionOut, TransactionUpdate
 from app.services.ai_categorizer import AICategorizer
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
 
 @router.get("/", response_model=list[TransactionOut])
 async def list_transactions(
-    limit: int = 50,
-    offset: int = 0,
-    month: str | None = None,
-    category_id: int | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    month: str | None = Query(None),
+    category_id: int | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """Lista transacciones con filtros."""
-    stmt = select(Transaction).order_by(Transaction.date.desc())
+    """Lista transacciones del usuario actual."""
+    stmt = select(Transaction).where(Transaction.user_id == user.id).order_by(Transaction.date.desc())
     if month:
         year, m = month.split("-")
-        from sqlalchemy import extract
         stmt = stmt.where(
             extract("year", Transaction.date) == int(year),
             extract("month", Transaction.date) == int(m),
@@ -41,30 +42,98 @@ async def list_transactions(
 async def create_transaction(
     data: TransactionCreate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Registra una nueva transacción."""
-    # Auto-categorización con IA si no seprovee categoría
+    confidence = None
+    auto_categorized = False
+
+    # Auto-categorización con IA si no se provee categoría
     if data.category_id is None and data.description:
         categorizer = AICategorizer(db)
         category_id, confidence = await categorizer.categorize(data.description)
-        data.category_id = category_id
-        # Guardar confidence si se categorizó automáticamente
-    else:
-        confidence = None
+        if category_id:
+            data.category_id = category_id
+            auto_categorized = True
 
-    transaction = Transaction(
-        **data.model_dump(),
+    tx = Transaction(
+        user_id=user.id,
+        account_id=data.account_id,
+        type=data.type,
+        amount=data.amount,
+        description=data.description,
+        payment_method=data.payment_method,
+        category_id=data.category_id,
+        mood=data.mood,
+        goal_id=data.goal_id,
+        date=data.date or datetime.utcnow(),
         ai_confidence=confidence,
+        is_auto_categorized=auto_categorized,
     )
-    db.add(transaction)
+    db.add(tx)
     await db.commit()
-    await db.refresh(transaction)
-    return transaction
+    await db.refresh(tx)
+    return tx
+
+
+@router.get("/summary", response_model=dict)
+async def transaction_summary(
+    month: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Resumen de transacciones del mes."""
+    from app.models.transaction import TransactionType
+    year, m = (month or datetime.utcnow().strftime("%Y-%m")).split("-")
+
+    income_q = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0))
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.type == TransactionType.INCOME,
+            extract("year", Transaction.date) == int(year),
+            extract("month", Transaction.date) == int(m),
+        )
+    )
+    expense_q = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0))
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.type == TransactionType.EXPENSE,
+            extract("year", Transaction.date) == int(year),
+            extract("month", Transaction.date) == int(m),
+        )
+    )
+    income = income_q.scalar() or 0
+    expense = expense_q.scalar() or 0
+    return {
+        "month": f"{year}-{m}",
+        "income": float(income),
+        "expense": float(expense),
+        "balance": float(income - expense),
+        "transaction_count": await db.execute(
+            select(func.count(Transaction.id))
+            .where(
+                Transaction.user_id == user.id,
+                extract("year", Transaction.date) == int(year),
+                extract("month", Transaction.date) == int(m),
+            )
+        )
+    }
 
 
 @router.get("/{transaction_id}", response_model=TransactionOut)
-async def get_transaction(transaction_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id))
+async def get_transaction(
+    transaction_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.user_id == user.id,
+        )
+    )
     tx = result.scalar_one_or_none()
     if not tx:
         raise HTTPException(status_code=404, detail="Transacción no encontrada")
@@ -76,8 +145,14 @@ async def update_transaction(
     transaction_id: int,
     data: TransactionUpdate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id))
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.user_id == user.id,
+        )
+    )
     tx = result.scalar_one_or_none()
     if not tx:
         raise HTTPException(status_code=404, detail="Transacción no encontrada")
@@ -89,8 +164,17 @@ async def update_transaction(
 
 
 @router.delete("/{transaction_id}", status_code=204)
-async def delete_transaction(transaction_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id))
+async def delete_transaction(
+    transaction_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.user_id == user.id,
+        )
+    )
     tx = result.scalar_one_or_none()
     if not tx:
         raise HTTPException(status_code=404, detail="Transacción no encontrada")

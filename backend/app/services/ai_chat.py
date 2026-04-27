@@ -10,7 +10,7 @@ from app.models.category import Category
 from app.schemas.chat import ChatResponse
 
 
-SYSTEM_PROMPT = """Eres Flow, el asistente financiero de una pareja (Joseph y Luz). 
+SYSTEM_PROMPT = """Eres Flow, el asistente financiero de una pareja (Joseph y Luz).
 Respondes en español, de forma amigable y clara.
 Tienes acceso a sus transacciones financieras para responder preguntas.
 Sé conciso, máximo 3-4 oraciones.
@@ -19,11 +19,12 @@ Si no tienes datos para responder, di que no tienes esa información."""
 
 
 class AIChatService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, user_id: int):
         self.db = db
+        self.user_id = user_id
 
     async def _get_context(self) -> str:
-        """Prepara contexto con datos financieros recientes."""
+        """Prepara contexto con datos financieros recientes del usuario."""
         from datetime import datetime
         now = datetime.utcnow()
         month_str = f"{now.year}-{now.month:02d}"
@@ -36,6 +37,7 @@ class AIChatService:
             )
             .join(Transaction, Transaction.category_id == Category.id, isouter=True)
             .where(
+                Transaction.user_id == self.user_id,
                 Transaction.type == TransactionType.EXPENSE,
                 extract("year", Transaction.date) == now.year,
                 extract("month", Transaction.date) == now.month,
@@ -48,6 +50,7 @@ class AIChatService:
         income = await self.db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0))
             .where(
+                Transaction.user_id == self.user_id,
                 Transaction.type == TransactionType.INCOME,
                 extract("year", Transaction.date) == now.year,
                 extract("month", Transaction.date) == now.month,
@@ -56,6 +59,7 @@ class AIChatService:
         expense = await self.db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0))
             .where(
+                Transaction.user_id == self.user_id,
                 Transaction.type == TransactionType.EXPENSE,
                 extract("year", Transaction.date) == now.year,
                 extract("month", Transaction.date) == now.month,
@@ -82,7 +86,7 @@ Gastos por categoría:
         if not settings.minimax_api_key:
             # Fallback sin IA real
             return ChatResponse(
-                response="💬 Por ahora solo tengo datos básicos. Configuremos MiniMax para el chat completo.",
+                response="💬 Configuremos MiniMax para el chat completo. Mientras tanto, aquí van tus datos:\n\n" + context[:500],
                 sources=["dashboard"],
             )
 

@@ -2,30 +2,33 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from decimal import Decimal
 
 from app.database import get_db
-from app.models.goal import Goal, GoalContribution
-from app.models.transaction import Transaction
+from app.models.goal import Goal
+from app.models.goal_contribution import GoalContribution
+from app.models.user import User
 from app.schemas.goal import GoalCreate, GoalOut, GoalContributionCreate
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
 
 @router.get("/", response_model=list[GoalOut])
-async def list_goals(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Goal).order_by(Goal.created_at.desc()))
+async def list_goals(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Goal).where(Goal.user_id == user.id).order_by(Goal.created_at.desc()))
     goals = result.scalars().all()
 
-    # Calcular progreso para cada meta
     enriched = []
     for goal in goals:
         contribs = await db.execute(
             select(func.coalesce(func.sum(GoalContribution.amount), 0))
             .where(GoalContribution.goal_id == goal.id)
         )
-        current = contribs.scalar() or Decimal("0")
-        progress = float(current / goal.target_amount * 100) if goal.target_amount else 0
+        current = contribs.scalar() or 0
+        progress = float(current / float(goal.target_amount) * 100) if goal.target_amount else 0
         goal.current_amount = current
         goal.progress_pct = min(progress, 100)
         enriched.append(goal)
@@ -33,8 +36,12 @@ async def list_goals(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/", response_model=GoalOut, status_code=201)
-async def create_goal(data: GoalCreate, db: AsyncSession = Depends(get_db)):
-    goal = Goal(**data.model_dump())
+async def create_goal(
+    data: GoalCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    goal = Goal(**data.model_dump(), user_id=user.id)
     db.add(goal)
     await db.commit()
     await db.refresh(goal)
@@ -46,8 +53,9 @@ async def contribute_to_goal(
     goal_id: int,
     data: GoalContributionCreate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Goal).where(Goal.id == goal_id))
+    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user.id))
     goal = result.scalar_one_or_none()
     if not goal:
         raise HTTPException(status_code=404, detail="Meta no encontrada")
@@ -61,16 +69,20 @@ async def contribute_to_goal(
         select(func.coalesce(func.sum(GoalContribution.amount), 0))
         .where(GoalContribution.goal_id == goal.id)
     )
-    current = contribs.scalar() or Decimal("0")
+    current = contribs.scalar() or 0
     goal.current_amount = current
-    goal.progress_pct = min(float(current / goal.target_amount * 100), 100)
+    goal.progress_pct = min(float(current / float(goal.target_amount) * 100), 100)
     await db.commit()
     return goal
 
 
 @router.delete("/{goal_id}", status_code=204)
-async def delete_goal(goal_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Goal).where(Goal.id == goal_id))
+async def delete_goal(
+    goal_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user.id))
     goal = result.scalar_one_or_none()
     if not goal:
         raise HTTPException(status_code=404, detail="Meta no encontrada")

@@ -3,6 +3,13 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 
+class GoalCreate(BaseModel):
+    name: str
+    target_amount: Decimal
+    deadline: datetime | None = None
+    emoji: str = "🎯"
+
+
 class GoalContributionCreate(BaseModel):
     amount: Decimal
     note: str | None = None

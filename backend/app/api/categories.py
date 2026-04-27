@@ -1,11 +1,13 @@
 """Categories API routes."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db
 from app.models.category import Category
+from app.models.user import User
 from app.schemas.category import CategoryCreate, CategoryOut
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
@@ -23,7 +25,10 @@ DEFAULT_CATEGORIES = [
 
 
 @router.get("/", response_model=list[CategoryOut])
-async def list_categories(db: AsyncSession = Depends(get_db)):
+async def list_categories(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     result = await db.execute(select(Category).order_by(Category.is_default.desc(), Category.name))
     cats = result.scalars().all()
     if not cats:
@@ -36,8 +41,12 @@ async def list_categories(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/", response_model=CategoryOut, status_code=201)
-async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_db)):
-    cat = Category(**data.model_dump(), is_default=False)
+async def create_category(
+    data: CategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    cat = Category(**data.model_dump(), is_default=False, user_id=user.id)
     db.add(cat)
     await db.commit()
     await db.refresh(cat)
@@ -45,12 +54,19 @@ async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_d
 
 
 @router.delete("/{category_id}", status_code=204)
-async def delete_category(category_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_category(
+    category_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from fastapi import HTTPException
     result = await db.execute(select(Category).where(Category.id == category_id))
     cat = result.scalar_one_or_none()
     if not cat:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
     if cat.is_default:
         raise HTTPException(status_code=400, detail="No se pueden borrar categorías default")
+    if cat.user_id and cat.user_id != user.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso")
     await db.delete(cat)
     await db.commit()

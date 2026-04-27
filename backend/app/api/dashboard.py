@@ -1,13 +1,15 @@
 """Dashboard API routes."""
 from decimal import Decimal
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, extract, func
 
 from app.database import get_db
 from app.models.transaction import Transaction, TransactionType
 from app.models.category import Category
+from app.models.user import User
 from app.schemas.dashboard import DashboardOut, CategoryTotal, MonthlyBalance
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
@@ -19,13 +21,17 @@ def _current_month() -> tuple[int, int]:
 
 
 @router.get("/", response_model=DashboardOut)
-async def get_dashboard(db: AsyncSession = Depends(get_db)):
+async def get_dashboard(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     year, month = _current_month()
 
     # Ingresos y gastos del mes actual
     income_q = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
         .where(
+            Transaction.user_id == user.id,
             Transaction.type == TransactionType.INCOME,
             extract("year", Transaction.date) == year,
             extract("month", Transaction.date) == month,
@@ -36,6 +42,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     expense_q = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
         .where(
+            Transaction.user_id == user.id,
             Transaction.type == TransactionType.EXPENSE,
             extract("year", Transaction.date) == year,
             extract("month", Transaction.date) == month,
@@ -53,6 +60,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         )
         .join(Transaction, Transaction.category_id == Category.id, isouter=True)
         .where(
+            Transaction.user_id == user.id,
             Transaction.type == TransactionType.EXPENSE,
             extract("year", Transaction.date) == year,
             extract("month", Transaction.date) == month,
@@ -77,18 +85,17 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     monthly_trend = []
     from datetime import datetime
     for i in range(5, -1, -1):
-        d = datetime(year, month, 1)
-        import calendar
-        if month - i <= 0:
-            d = datetime(year - 1, month - i + 12, 1)
-        else:
-            d = datetime(year, month - i, 1)
-        m_year, m_month = d.year, d.month
+        m_month = month - i
+        m_year = year
+        while m_month <= 0:
+            m_month += 12
+            m_year -= 1
         m_str = f"{m_year}-{m_month:02d}"
 
         inc = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0))
             .where(
+                Transaction.user_id == user.id,
                 Transaction.type == TransactionType.INCOME,
                 extract("year", Transaction.date) == m_year,
                 extract("month", Transaction.date) == m_month,
@@ -97,6 +104,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         exp = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0))
             .where(
+                Transaction.user_id == user.id,
                 Transaction.type == TransactionType.EXPENSE,
                 extract("year", Transaction.date) == m_year,
                 extract("month", Transaction.date) == m_month,
