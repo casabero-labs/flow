@@ -36,6 +36,7 @@ jobs:
           tags: |
             type=sha,prefix=
             type=raw,value=latest
+          default-settings: type=image,visibility=public
 
       - name: Build and push
         uses: docker/build-push-action@v6
