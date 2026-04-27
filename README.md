@@ -49,3 +49,8 @@ npm run dev
 ## Deploy
 
 Desplegado en Coolify. Ver [docs/deployments/](./docs/deployments/).
+
+## CI/CD
+
+Deploy automático via GitHub Actions + ghcr.io
+
