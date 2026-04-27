@@ -1,14 +1,23 @@
-# flow — Frontend Dockerfile
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-COPY frontend/package*.json ./
+
+COPY package*.json ./
 RUN npm ci
-COPY frontend/ ./
+
+COPY . .
 RUN npm run build
 
 FROM nginx:alpine
+
+# Instalar envsubst para sustituir variables de entorno en nginx.conf
+RUN apk add --no-cache gettext
+
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf.template
+
+# Sustituir ${BACKEND_URL} con el valor real al arrancar
+# Coolify inyecta BACKEND_URL como env var del container
+CMD ["/bin/sh", "-c", "envsubst < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+
 EXPOSE 3000
-CMD ["nginx", "-g", "daemon off;"]
