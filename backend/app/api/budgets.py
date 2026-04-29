@@ -75,7 +75,7 @@ async def budget_alerts(
             )
         )
         spent = spent_q.scalar() or 0
-        pct = float(spent / float(b.limit_amount) * 100) if b.limit_amount else 0
+        pct = float(spent) / float(b.limit_amount) * 100 if b.limit_amount else 0
 
         if pct >= 100 and not b.alert_100_sent:
             alerts.append({"category_id": b.category_id, "percentage": pct, "alert_type": "100%", "spent": float(spent), "limit": float(b.limit_amount)})

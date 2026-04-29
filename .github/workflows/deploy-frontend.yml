@@ -9,9 +9,11 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/flow-frontend
+  COOLIFY_URL: http://192.168.1.7:8000
+  COOLIFY_UUID: r27loylqoj3pdjzre3ia1y5j
 
 jobs:
-  build-and-deploy:
+  test-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,6 +23,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ── Verification step ──
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd frontend && npm ci
+
+      - name: TypeScript check & Build
+        run: |
+          cd frontend && npm run build
+
+      # ── Build & Push ──
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
@@ -46,3 +65,70 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      # ── Coolify Deploy ──
+      - name: Notify Coolify
+        id: coolify
+        env:
+          COOLIFY_API_KEY: ${{ secrets.COOLIFY_API_KEY }}
+        run: |
+          set -e
+
+          echo "🚀 Triggering Coolify deployment for frontend..."
+          RESPONSE=$(curl -s -X POST "${{ env.COOLIFY_URL }}/api/v1/deploy?uuid=${{ env.COOLIFY_UUID }}&force=true" \
+            -H "Authorization: Bearer $COOLIFY_API_KEY" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $RESPONSE"
+
+          # Extract deployment_uuid
+          DEPLOYMENT_UUID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('deployment_uuid',''))" 2>/dev/null || echo "")
+
+          if [ -z "$DEPLOYMENT_UUID" ]; then
+            echo "⚠️  No deployment UUID returned — deployment may already be in progress."
+            echo "Response: $RESPONSE"
+            exit 0
+          fi
+
+          echo "Deployment UUID: $DEPLOYMENT_UUID"
+
+          # Poll until finished
+          INTERVAL=10
+          MAX_RETRIES=60  # 10 min max
+          RETRIES=0
+
+          while [ $RETRIES -lt $MAX_RETRIES ]; do
+            sleep $INTERVAL
+
+            STATUS_RESPONSE=$(curl -s "${{ env.COOLIFY_URL }}/api/v1/deployments/$DEPLOYMENT_UUID" \
+              -H "Authorization: Bearer $COOLIFY_API_KEY")
+
+            STATUS=$(echo "$STATUS_RESPONSE" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get('status', d.get('data', {}).get('status', 'unknown')))
+except:
+    print('error')
+" 2>/dev/null)
+
+            echo "Polling ($((RETRIES+1))/$MAX_RETRIES): status=$STATUS"
+
+            case "$STATUS" in
+              finished)
+                echo "✅ Coolify deployment finished successfully!"
+                exit 0
+                ;;
+              failed|canceled)
+                echo "❌ Coolify deployment $STATUS"
+                echo "Details: $STATUS_RESPONSE"
+                exit 1
+                ;;
+              *)
+                RETRIES=$((RETRIES+1))
+                ;;
+            esac
+          done
+
+          echo "⏰ Timeout waiting for Coolify deployment"
+          exit 1

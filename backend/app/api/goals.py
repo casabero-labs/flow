@@ -32,7 +32,7 @@ async def list_goals(
             .where(GoalContribution.goal_id == goal.id)
         )
         current = contribs.scalar() or 0
-        progress = float(current / float(goal.target_amount) * 100) if goal.target_amount else 0
+        progress = float(current) / float(goal.target_amount) * 100 if goal.target_amount else 0
         goal.current_amount = current
         goal.progress_pct = min(progress, 100)
         enriched.append(goal)
@@ -80,7 +80,7 @@ async def contribute_to_goal(
     )
     current = contribs.scalar() or 0
     goal.current_amount = current
-    goal.progress_pct = min(float(current / float(goal.target_amount) * 100), 100)
+    goal.progress_pct = min(float(current) / float(goal.target_amount) * 100, 100)
     await db.commit()
     return goal
 

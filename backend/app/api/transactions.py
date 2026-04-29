@@ -117,14 +117,16 @@ async def transaction_summary(
         "income": float(income),
         "expense": float(expense),
         "balance": float(income - expense),
-        "transaction_count": await db.execute(
-            select(func.count(Transaction.id))
-            .where(
-                Transaction.user_id.in_(user_ids),
-                extract("year", Transaction.date) == int(year),
-                extract("month", Transaction.date) == int(m),
+        "transaction_count": (
+            await db.execute(
+                select(func.count(Transaction.id))
+                .where(
+                    Transaction.user_id.in_(user_ids),
+                    extract("year", Transaction.date) == int(year),
+                    extract("month", Transaction.date) == int(m),
+                )
             )
-        )
+        ).scalar(),
     }
 
 

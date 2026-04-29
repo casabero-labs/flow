@@ -2,15 +2,15 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: backend/Dockerfile
     container_name: flow-backend
     restart: unless-stopped
     expose:
       - "8000"
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./flow.db
-      - SECRET_KEY=${SECRET_KEY}
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+      - SECRET_KEY=***
+      - MINIMAX_API_KEY=${MINI...KEY}
       - DEBUG=false
     volumes:
       - flow-data:/app
