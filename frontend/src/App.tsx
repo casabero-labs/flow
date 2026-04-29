@@ -1,34 +1,29 @@
-import { useState } from 'react'
-import './styles/app.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
-// Páginas (se implementan después)
-import Dashboard from './pages/Dashboard'
-import Transactions from './pages/Transactions'
-import Goals from './pages/Goals'
-import Budgets from './pages/Budgets'
-import Insights from './pages/Insights'
-import HelpMenu from './components/HelpMenu'
+// Auth pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+import PartnershipSetup from './pages/PartnershipSetup';
 
-type Page = 'dashboard' | 'transactions' | 'goals' | 'budgets' | 'insights'
+// Protected pages
+import Dashboard from './pages/Dashboard';
+import Transactions from './pages/Transactions';
+import Goals from './pages/Goals';
+import Budgets from './pages/Budgets';
+import Insights from './pages/Insights';
+import HelpMenu from './components/HelpMenu';
 
-export default function App() {
-  const [page, setPage] = useState<Page>('dashboard')
-  const [darkMode, setDarkMode] = useState(true)
-  const [showHelp, setShowHelp] = useState(false)
+import { useState } from 'react';
+import './styles/app.css';
 
-  const navItems: { id: Page; label: string; icon: string }[] = [
-    { id: 'dashboard', label: 'Inicio', icon: '🏠' },
-    { id: 'transactions', label: 'Movimientos', icon: '💸' },
-    { id: 'goals', label: 'Metas', icon: '🎯' },
-    { id: 'budgets', label: 'Presupuesto', icon: '💰' },
-    { id: 'insights', label: 'Insights', icon: '🔍' },
-  ]
-
-  const toggleDark = () => setDarkMode(d => !d)
+function AppLayout({ children }: { children: React.ReactNode }) {
+  const [darkMode, setDarkMode] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
 
   return (
     <div className={`app ${darkMode ? 'dark' : 'light'}`}>
-      {/* Header */}
       <header className="app-header">
         <div className="header-left">
           <span className="logo">flow</span>
@@ -36,7 +31,7 @@ export default function App() {
         <div className="header-right">
           <button
             className="btn-icon"
-            onClick={toggleDark}
+            onClick={() => setDarkMode(d => !d)}
             title={darkMode ? 'Modo claro' : 'Modo oscuro'}
           >
             {darkMode ? '☀️' : '🌙'}
@@ -51,31 +46,113 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="app-main">
-        {page === 'dashboard' && <Dashboard />}
-        {page === 'transactions' && <Transactions />}
-        {page === 'goals' && <Goals />}
-        {page === 'budgets' && <Budgets />}
-        {page === 'insights' && <Insights />}
+        {children}
       </main>
 
-      {/* Bottom nav (mobile-first) */}
       <nav className="bottom-nav">
-        {navItems.map(item => (
-          <button
-            key={item.id}
-            className={`nav-btn ${page === item.id ? 'active' : ''}`}
-            onClick={() => setPage(item.id)}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            <span className="nav-label">{item.label}</span>
-          </button>
-        ))}
+        <button className="nav-btn active">
+          <span className="nav-icon">🏠</span>
+          <span className="nav-label">Inicio</span>
+        </button>
+        <button className="nav-btn">
+          <span className="nav-icon">💸</span>
+          <span className="nav-label">Movimientos</span>
+        </button>
+        <button className="nav-btn">
+          <span className="nav-icon">🎯</span>
+          <span className="nav-label">Metas</span>
+        </button>
+        <button className="nav-btn">
+          <span className="nav-icon">💰</span>
+          <span className="nav-label">Presupuesto</span>
+        </button>
+        <button className="nav-btn">
+          <span className="nav-icon">🔍</span>
+          <span className="nav-label">Insights</span>
+        </button>
       </nav>
 
-      {/* Help overlay */}
       {showHelp && <HelpMenu onClose={() => setShowHelp(false)} />}
     </div>
-  )
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+
+          {/* Auth required, no partnership required */}
+          <Route
+            path="/setup"
+            element={
+              <ProtectedRoute requirePartnership={false}>
+                <PartnershipSetup />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected routes */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Dashboard />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/transactions"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Transactions />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/budgets"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Budgets />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/goals"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Goals />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/insights"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Insights />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Catch all - redirect to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }
