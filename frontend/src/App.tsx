@@ -1,6 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+
+// Telemetry
+import { sendTelemetryEvent } from './api/telemetry';
 
 // Auth pages
 import Login from './pages/Login';
@@ -15,8 +18,25 @@ import Budgets from './pages/Budgets';
 import Insights from './pages/Insights';
 import HelpMenu from './components/HelpMenu';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './styles/app.css';
+
+
+function PageViewTracker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    sendTelemetryEvent('page_view', {
+      path: location.pathname,
+      search: location.search,
+      referrer: document.referrer || undefined,
+      user_agent: navigator.userAgent.slice(0, 200),
+    });
+  }, [location]);
+
+  return null;
+}
+
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const [darkMode, setDarkMode] = useState(true);
@@ -82,6 +102,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <PageViewTracker />
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />

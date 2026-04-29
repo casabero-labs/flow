@@ -70,7 +70,6 @@ docs/
 - [ ] Frontend: Login, Register, PartnershipSetup pages
 - [ ] Frontend: AuthContext + ProtectedRoute
 - [ ] End-to-end test (registro → partnership → datos compartidos)
-- [ ] docs/architecture/
 
 ---
 
@@ -86,3 +85,20 @@ docs/
 - Partnership model + API + queries compartidas implementado
 - Bugs arreglados: orden de operaciones en cálculos %, .scalar() faltante en queries
 - 3 subagentes MiniMax trabajando en paralelo
+
+### 2026-04-29 08:00 — Fase 3 completada: Documentación de arquitectura y QA
+
+**Fase 3: Standards Compliance — COMPLETA ✅**
+
+Lo que se hizo:
+- **docs/architecture/README.md** 🆕 — Stack overview (FastAPI + React 19 + Vite + SQLite), decisiones de diseño documentadas (SQLite para simpleza, async SQLAlchemy, JWT auth, partnership model, CORS restringido, Infisical), dependencias principales, estructura completa del proyecto con jerarquía de backend/frontend/docs.
+- **docs/architecture/database.md** 🆕 — Diagrama ER descriptivo de las 11 tablas (users, accounts, categories, transactions, budgets, goals, goal_contributions, partnerships, telemetry_events, insights, monthly_summaries), columnas detalladas con tipos y restricciones, relaciones N:1, resumen de migraciones y plan para Alembic.
+- **docs/qa_reports/001-backend-tests.md** 🆕 — Reporte completo: 74 tests pasando 100%, cobertura por módulo (auth 10, accounts 8, transactions 15, budgets 9, goals 9, categories 8, dashboard 4, security 9, main 2), herramientas (pytest + httpx + ASGITransport + asyncio), fixture setup detallado con conftest.py explicado.
+- **README.md** actualizado — Badges de CI/CD (CI, Deploy Backend, Deploy Frontend, tests 74✔, status producción), tabla de estado de servicios, badges de stack, sección de tests, tabla de pipelines CI/CD, enlaces a nueva documentación.
+- **docs/AI_LOG.md** — Bitácora actualizada con esta sesión.
+
+CI/CD confirmado:
+- `ci.yml`: Backend tests + frontend lint/build en cada push
+- `deploy-backend.yml`: Tests → Docker build → ghcr.io → Coolify (master, paths: backend/)
+- `deploy-frontend.yml`: Build → Docker → ghcr.io → Coolify (master, paths: frontend/)
+- Dominio: flow.casabero.com 🟢 producción

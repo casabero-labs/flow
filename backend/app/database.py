@@ -19,6 +19,7 @@ from app.models.budget import Budget  # noqa: F401, E402
 from app.models.goal import Goal  # noqa: F401, E402
 from app.models.goal_contribution import GoalContribution  # noqa: F401, E402
 from app.models.insight import Insight  # noqa: F401, E402
+from app.models.telemetry import TelemetryEvent  # noqa: F401, E402
 
 engine = create_async_engine(
     settings.database_url,

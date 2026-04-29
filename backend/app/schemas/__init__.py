@@ -9,6 +9,7 @@ from app.schemas.insight import InsightOut
 from app.schemas.summary import MonthlySummaryOut
 from app.schemas.dashboard import DashboardOut
 from app.schemas.chat import ChatMessage, ChatResponse
+from app.schemas.telemetry import TelemetryEventCreate
 
 __all__ = [
     "UserCreate", "UserOut", "UserLogin",
@@ -21,4 +22,5 @@ __all__ = [
     "MonthlySummaryOut",
     "DashboardOut",
     "ChatMessage", "ChatResponse",
+    "TelemetryEventCreate",
 ]

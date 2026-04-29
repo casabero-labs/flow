@@ -6,6 +6,7 @@ from app.models.transaction import Transaction
 from app.models.budget import Budget
 from app.models.goal import Goal
 from app.models.goal_contribution import GoalContribution
+from app.models.partnership import Partnership
 from app.models.insight import Insight
 from app.models.monthly_summary import MonthlySummary
 from app.models.telemetry import TelemetryEvent
@@ -18,6 +19,7 @@ __all__ = [
     "Budget",
     "Goal",
     "GoalContribution",
+    "Partnership",
     "Insight",
     "MonthlySummary",
     "TelemetryEvent",
