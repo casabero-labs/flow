@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { LoginPage, RegisterPage } from './pages';
+import { LoginPage, RegisterPage, mockTelemetryApi } from './pages';
 
 test.describe('Login — Pantalla de inicio de sesión', () => {
   let loginPage: LoginPage;
@@ -29,7 +29,7 @@ test.describe('Login — Pantalla de inicio de sesión', () => {
     await loginPage.goto();
 
     // Mockear el login para que devuelva error 401
-    await page.route('**/api/v1/auth/login', async (route) => {
+    await page.route('**/api/auth/login', async (route) => {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',

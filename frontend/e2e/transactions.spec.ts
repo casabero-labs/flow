@@ -1,20 +1,22 @@
 import { test, expect } from '@playwright/test';
 import {
-  TransactionsPage,
-  mockAuthApi,
-  mockPartnershipApi,
-  setAuthStorage,
+ TransactionsPage,
+ mockAuthApi,
+ mockPartnershipApi,
+ mockTelemetryApi,
+ setAuthStorage,
 } from './pages';
 
 test.describe('Transactions — Pantalla de movimientos', () => {
-  let transactionsPage: TransactionsPage;
+ let transactionsPage: TransactionsPage;
 
-  test.beforeEach(async ({ page }) => {
-    transactionsPage = new TransactionsPage(page);
-    await mockAuthApi(page);
-    await mockPartnershipApi(page, 'active');
-    await setAuthStorage(page);
-  });
+ test.beforeEach(async ({ page }) => {
+ transactionsPage = new TransactionsPage(page);
+ await mockAuthApi(page);
+ await mockPartnershipApi(page, 'active');
+ await mockTelemetryApi(page);
+ await setAuthStorage(page);
+ });
 
   test('debe mostrar la página de movimientos con layout completo', async ({ page }) => {
     await transactionsPage.goto();

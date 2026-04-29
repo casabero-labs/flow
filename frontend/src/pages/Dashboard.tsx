@@ -9,7 +9,7 @@ export default function Dashboard() {
   const [data, setData] = useState<any>(null)
 
   useEffect(() => {
-    fetch('/api/v1/dashboard')
+    fetch('/api/dashboard')
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))

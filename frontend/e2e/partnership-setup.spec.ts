@@ -1,21 +1,23 @@
 import { test, expect } from '@playwright/test';
 import {
-  RegisterPage,
-  LoginPage,
-  PartnershipSetupPage,
-  mockAuthApi,
-  mockPartnershipApi,
-  setAuthStorage,
+ RegisterPage,
+ LoginPage,
+ PartnershipSetupPage,
+ mockAuthApi,
+ mockPartnershipApi,
+ mockTelemetryApi,
+ setAuthStorage,
 } from './pages';
 
 test.describe('PartnershipSetup — Configuración de pareja', () => {
-  let setupPage: PartnershipSetupPage;
+ let setupPage: PartnershipSetupPage;
 
-  test.beforeEach(async ({ page }) => {
-    setupPage = new PartnershipSetupPage(page);
-    await mockAuthApi(page);
-    await setAuthStorage(page);
-  });
+ test.beforeEach(async ({ page }) => {
+ setupPage = new PartnershipSetupPage(page);
+ await mockAuthApi(page);
+ await mockTelemetryApi(page);
+ await setAuthStorage(page);
+ });
 
   test('debe mostrar la pantalla de setup correctamente', async ({ page }) => {
     await mockPartnershipApi(page, 'none');
@@ -65,16 +67,15 @@ test.describe('PartnershipSetup — Configuración de pareja', () => {
 
     await setupPage.joinTab.click();
 
-    // Ingresar código de menos de 6 caracteres
-    await setupPage.joinCodeInput.fill('ABC');
-    await setupPage.joinSubmitButton.click();
+  // Ingresar código de menos de 6 caracteres
+  await setupPage.joinCodeInput.fill('ABC');
 
-    // El botón debería estar disabled si el código no tiene 6 caracteres
-    await expect(setupPage.joinSubmitButton).toBeDisabled();
+  // El botón debería estar disabled si el código no tiene 6 caracteres
+  await expect(setupPage.joinSubmitButton).toBeDisabled();
 
-    // Ingresar código de 6 caracteres pero inválido
-    await setupPage.joinCodeInput.fill('ZZZZZZ');
-    await setupPage.joinSubmitButton.click();
+  // Ingresar código de 6 caracteres pero inválido
+  await setupPage.joinCodeInput.fill('ZZZZZZ');
+  await setupPage.joinSubmitButton.click();
 
     await expect(setupPage.errorMessage).toBeVisible();
   });

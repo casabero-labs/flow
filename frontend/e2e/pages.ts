@@ -213,7 +213,7 @@ export class TransactionsPage {
  */
 export async function mockAuthApi(page: Page) {
   // Mock login endpoint
-  await page.route('**/api/v1/auth/login', async (route) => {
+  await page.route('**/api/auth/login', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -225,7 +225,7 @@ export async function mockAuthApi(page: Page) {
   });
 
   // Mock register endpoint
-  await page.route('**/api/v1/auth/register', async (route) => {
+  await page.route('**/api/auth/register', async (route) => {
     await route.fulfill({
       status: 201,
       contentType: 'application/json',
@@ -237,7 +237,7 @@ export async function mockAuthApi(page: Page) {
   });
 
   // Mock get /auth/me
-  await page.route('**/api/v1/auth/me', async (route) => {
+  await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -254,7 +254,7 @@ export async function mockAuthApi(page: Page) {
  * Helper para mockear partnership status
  */
 export async function mockPartnershipApi(page: Page, status: 'none' | 'active' | 'pending' = 'none') {
-  await page.route('**/api/v1/partnerships/status', async (route) => {
+  await page.route('**/api/partnerships/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -269,7 +269,7 @@ export async function mockPartnershipApi(page: Page, status: 'none' | 'active' |
   });
 
   // Mock create invite
-  await page.route('**/api/v1/partnerships/invite', async (route) => {
+  await page.route('**/api/partnerships/invite', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -280,18 +280,30 @@ export async function mockPartnershipApi(page: Page, status: 'none' | 'active' |
     });
   });
 
-  // Mock join with code
-  await page.route('**/api/v1/partnerships/join', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        status: 'active',
-        partner: { id: 'partner-1', name: 'Partner', email: 'partner@flow.app' },
-        joinedAt: new Date().toISOString(),
-      }),
-    });
-  });
+ // Mock join with code
+ await page.route('**/api/partnerships/join', async (route) => {
+   // Devuelve 400 para códigos inválidos
+   const body = route.request().postData();
+   const isInvalid = body && (body.includes('ABC') || body.includes('ZZZZZZ'));
+   
+   if (isInvalid) {
+     await route.fulfill({
+       status: 400,
+       contentType: 'application/json',
+       body: JSON.stringify({ message: 'Código de invitación inválido' }),
+     });
+   } else {
+     await route.fulfill({
+       status: 200,
+       contentType: 'application/json',
+       body: JSON.stringify({
+         status: 'active',
+         partner: { id: 'partner-1', name: 'Partner', email: 'partner@flow.app' },
+         joinedAt: new Date().toISOString(),
+       }),
+     });
+   }
+ });
 }
 
 /**
@@ -323,7 +335,8 @@ export async function mockDashboardApi(page: Page, hasData = true) {
         monthly_trend: [],
       };
 
-  await page.route('**/api/v1/dashboard', async (route) => {
+  await page.route('**/api/dashboard', async (route) => {
+    console.log('DASHBOARD MOCK:', JSON.stringify(dashboardData).slice(0, 100));
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -336,12 +349,28 @@ export async function mockDashboardApi(page: Page, hasData = true) {
  * Helper para autenticar al usuario en el storage del navegador
  */
 export async function setAuthStorage(page: Page) {
+  // Navigate to the app first — localStorage is blocked on about:blank
+  await page.goto('/');
   await page.evaluate(() => {
     localStorage.setItem('flow_token', 'mock-token-e2e-test');
     localStorage.setItem('flow_user', JSON.stringify({
       id: '1',
-      email: 'test@flow.app',
-      name: 'Test User',
-    }));
+ email: 'test@flow.app',
+ name: 'Test User',
+ }));
+ });
+}
+
+/**
+ * Helper para mockear el endpoint de telemetry — se llama al cargar la app
+ * y causa errores si no hay backend.
+ */
+export async function mockTelemetryApi(page: Page) {
+  await page.route('**/api/telemetry/**', async (route) => {
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    });
   });
 }
