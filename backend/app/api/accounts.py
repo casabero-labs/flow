@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.account import Account
 from app.models.user import User
 from app.schemas.account import AccountCreate, AccountOut
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_partner_id
 
 router = APIRouter()
 
@@ -17,7 +17,10 @@ async def list_accounts(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Account).where(Account.user_id == user.id))
+    """Lista cuentas del usuario y su partner (si hay partnership activo)."""
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
+    result = await db.execute(select(Account).where(Account.user_id.in_(user_ids)))
     return result.scalars().all()
 
 
@@ -27,6 +30,7 @@ async def create_account(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Crea una cuenta propia (no compartida)."""
     account = Account(**data.model_dump(), user_id=user.id)
     db.add(account)
     await db.commit()
@@ -40,6 +44,7 @@ async def delete_account(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Elimina una cuenta propia."""
     result = await db.execute(select(Account).where(Account.id == account_id, Account.user_id == user.id))
     acc = result.scalar_one_or_none()
     if not acc:

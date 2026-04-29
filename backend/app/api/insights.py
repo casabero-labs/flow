@@ -18,6 +18,7 @@ async def list_insights(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Lista todos los insights (sistema)."""
     stmt = select(Insight).order_by(Insight.generated_at.desc())
     if unread_only:
         stmt = stmt.where(Insight.is_read == False)
@@ -31,6 +32,7 @@ async def mark_insight_read(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Marca un insight como leído."""
     result = await db.execute(select(Insight).where(Insight.id == insight_id))
     insight = result.scalar_one_or_none()
     if insight:

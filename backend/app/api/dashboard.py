@@ -9,7 +9,7 @@ from app.models.transaction import Transaction, TransactionType
 from app.models.category import Category
 from app.models.user import User
 from app.schemas.dashboard import DashboardOut, CategoryTotal, MonthlyBalance
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_partner_id
 
 router = APIRouter()
 
@@ -25,13 +25,17 @@ async def get_dashboard(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Dashboard con datos del usuario y su partner (si hay partnership activo)."""
     year, month = _current_month()
+
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
 
     # Ingresos y gastos del mes actual
     income_q = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
         .where(
-            Transaction.user_id == user.id,
+            Transaction.user_id.in_(user_ids),
             Transaction.type == TransactionType.INCOME,
             extract("year", Transaction.date) == year,
             extract("month", Transaction.date) == month,
@@ -42,7 +46,7 @@ async def get_dashboard(
     expense_q = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
         .where(
-            Transaction.user_id == user.id,
+            Transaction.user_id.in_(user_ids),
             Transaction.type == TransactionType.EXPENSE,
             extract("year", Transaction.date) == year,
             extract("month", Transaction.date) == month,
@@ -60,7 +64,7 @@ async def get_dashboard(
         )
         .join(Transaction, Transaction.category_id == Category.id, isouter=True)
         .where(
-            Transaction.user_id == user.id,
+            Transaction.user_id.in_(user_ids),
             Transaction.type == TransactionType.EXPENSE,
             extract("year", Transaction.date) == year,
             extract("month", Transaction.date) == month,
@@ -95,7 +99,7 @@ async def get_dashboard(
         inc = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0))
             .where(
-                Transaction.user_id == user.id,
+                Transaction.user_id.in_(user_ids),
                 Transaction.type == TransactionType.INCOME,
                 extract("year", Transaction.date) == m_year,
                 extract("month", Transaction.date) == m_month,
@@ -104,7 +108,7 @@ async def get_dashboard(
         exp = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0))
             .where(
-                Transaction.user_id == user.id,
+                Transaction.user_id.in_(user_ids),
                 Transaction.type == TransactionType.EXPENSE,
                 extract("year", Transaction.date) == m_year,
                 extract("month", Transaction.date) == m_month,

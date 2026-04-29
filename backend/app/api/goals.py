@@ -8,7 +8,7 @@ from app.models.goal import Goal
 from app.models.goal_contribution import GoalContribution
 from app.models.user import User
 from app.schemas.goal import GoalCreate, GoalOut, GoalContributionCreate
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_partner_id
 
 router = APIRouter()
 
@@ -18,7 +18,11 @@ async def list_goals(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Goal).where(Goal.user_id == user.id).order_by(Goal.created_at.desc()))
+    """Lista metas del usuario y su partner (si hay partnership activo)."""
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
+
+    result = await db.execute(select(Goal).where(Goal.user_id.in_(user_ids)).order_by(Goal.created_at.desc()))
     goals = result.scalars().all()
 
     enriched = []
@@ -41,6 +45,7 @@ async def create_goal(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Crea una meta propia."""
     goal = Goal(**data.model_dump(), user_id=user.id)
     db.add(goal)
     await db.commit()
@@ -55,7 +60,11 @@ async def contribute_to_goal(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user.id))
+    """Agrega una contribución a una meta (propia o del partner)."""
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
+
+    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id.in_(user_ids)))
     goal = result.scalar_one_or_none()
     if not goal:
         raise HTTPException(status_code=404, detail="Meta no encontrada")
@@ -82,6 +91,7 @@ async def delete_goal(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Elimina una meta propia."""
     result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user.id))
     goal = result.scalar_one_or_none()
     if not goal:

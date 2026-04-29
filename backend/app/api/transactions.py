@@ -9,7 +9,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.transaction import TransactionCreate, TransactionOut, TransactionUpdate
 from app.services.ai_categorizer import AICategorizer
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_partner_id
 
 router = APIRouter()
 
@@ -23,8 +23,11 @@ async def list_transactions(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Lista transacciones del usuario actual."""
-    stmt = select(Transaction).where(Transaction.user_id == user.id).order_by(Transaction.date.desc())
+    """Lista transacciones del usuario y su partner (si hay)."""
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
+
+    stmt = select(Transaction).where(Transaction.user_id.in_(user_ids)).order_by(Transaction.date.desc())
     if month:
         year, m = month.split("-")
         stmt = stmt.where(
@@ -82,14 +85,17 @@ async def transaction_summary(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Resumen de transacciones del mes."""
+    """Resumen de transacciones del mes (usuario + partner si aplica)."""
     from app.models.transaction import TransactionType
     year, m = (month or datetime.utcnow().strftime("%Y-%m")).split("-")
+
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
 
     income_q = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
         .where(
-            Transaction.user_id == user.id,
+            Transaction.user_id.in_(user_ids),
             Transaction.type == TransactionType.INCOME,
             extract("year", Transaction.date) == int(year),
             extract("month", Transaction.date) == int(m),
@@ -98,7 +104,7 @@ async def transaction_summary(
     expense_q = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
         .where(
-            Transaction.user_id == user.id,
+            Transaction.user_id.in_(user_ids),
             Transaction.type == TransactionType.EXPENSE,
             extract("year", Transaction.date) == int(year),
             extract("month", Transaction.date) == int(m),
@@ -114,7 +120,7 @@ async def transaction_summary(
         "transaction_count": await db.execute(
             select(func.count(Transaction.id))
             .where(
-                Transaction.user_id == user.id,
+                Transaction.user_id.in_(user_ids),
                 extract("year", Transaction.date) == int(year),
                 extract("month", Transaction.date) == int(m),
             )
@@ -128,10 +134,12 @@ async def get_transaction(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
     result = await db.execute(
         select(Transaction).where(
             Transaction.id == transaction_id,
-            Transaction.user_id == user.id,
+            Transaction.user_id.in_(user_ids),
         )
     )
     tx = result.scalar_one_or_none()
@@ -147,10 +155,12 @@ async def update_transaction(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
     result = await db.execute(
         select(Transaction).where(
             Transaction.id == transaction_id,
-            Transaction.user_id == user.id,
+            Transaction.user_id.in_(user_ids),
         )
     )
     tx = result.scalar_one_or_none()

@@ -1,13 +1,13 @@
 """Categories API routes."""
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from app.database import get_db
 from app.models.category import Category
 from app.models.user import User
 from app.schemas.category import CategoryCreate, CategoryOut
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_partner_id
 
 router = APIRouter()
 
@@ -29,11 +29,20 @@ async def list_categories(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Category).order_by(Category.is_default.desc(), Category.name))
+    """Lista categorías del usuario y su partner (si hay)."""
+    partner_id = await get_partner_id(user.id, db)
+    if partner_id is None:
+        result = await db.execute(select(Category).order_by(Category.is_default.desc(), Category.name))
+    else:
+        result = await db.execute(
+            select(Category).where(
+                or_(Category.user_id == None, Category.user_id == user.id, Category.user_id == partner_id)
+            ).order_by(Category.is_default.desc(), Category.name)
+        )
     cats = result.scalars().all()
     if not cats:
         for cat_data in DEFAULT_CATEGORIES:
-            db.add(Category(**cat_data))
+            db.add(Category(**cat_data, user_id=user.id))
         await db.commit()
         result = await db.execute(select(Category).order_by(Category.is_default.desc(), Category.name))
         cats = result.scalars().all()
@@ -46,6 +55,7 @@ async def create_category(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Crea una categoría propia."""
     cat = Category(**data.model_dump(), is_default=False, user_id=user.id)
     db.add(cat)
     await db.commit()

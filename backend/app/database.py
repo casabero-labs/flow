@@ -4,6 +4,17 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
+# Import models to register them with Base
+from app.models.user import User  # noqa: F401
+from app.models.partnership import Partnership  # noqa: F401
+from app.models.account import Account  # noqa: F401
+from app.models.category import Category  # noqa: F401
+from app.models.transaction import Transaction  # noqa: F401
+from app.models.budget import Budget  # noqa: F401
+from app.models.goal import Goal  # noqa: F401
+from app.models.goal_contribution import GoalContribution  # noqa: F401
+from app.models.insight import Insight  # noqa: F401
+
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,

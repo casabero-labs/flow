@@ -2,10 +2,11 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_, and_
 
 from app.database import get_db
 from app.models.user import User
+from app.models.partnership import Partnership
 from app.config import settings
 from jose import jwt, JWTError
 
@@ -48,3 +49,19 @@ async def get_optional_user(
         return await get_current_user(credentials, db)
     except HTTPException:
         return None
+
+
+async def get_partner_id(user_id: int, db: AsyncSession) -> int | None:
+    """Retorna el ID del partner activo o None si no hay partnership."""
+    result = await db.execute(
+        select(Partnership).where(
+            or_(
+                and_(Partnership.inviter_id == user_id, Partnership.status == "active"),
+                and_(Partnership.invitee_id == user_id, Partnership.status == "active"),
+            )
+        )
+    )
+    partnership = result.scalar_one_or_none()
+    if partnership is None:
+        return None
+    return partnership.invitee_id if partnership.inviter_id == user_id else partnership.inviter_id

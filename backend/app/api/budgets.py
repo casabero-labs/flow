@@ -8,7 +8,7 @@ from app.models.budget import Budget
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.schemas.budget import BudgetCreate, BudgetOut
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_partner_id
 
 router = APIRouter()
 
@@ -19,7 +19,11 @@ async def list_budgets(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    stmt = select(Budget).where(Budget.user_id == user.id)
+    """Lista presupuestos del usuario y su partner (si hay)."""
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
+
+    stmt = select(Budget).where(Budget.user_id.in_(user_ids))
     if month:
         stmt = stmt.where(Budget.month == month)
     result = await db.execute(stmt)
@@ -32,6 +36,7 @@ async def create_budget(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Crea un presupuesto propio."""
     budget = Budget(**data.model_dump(), user_id=user.id)
     db.add(budget)
     await db.commit()
@@ -49,8 +54,11 @@ async def budget_alerts(
     month = datetime.utcnow().strftime("%Y-%m")
     year, m = month.split("-")
 
+    partner_id = await get_partner_id(user.id, db)
+    user_ids = [user.id] if partner_id is None else [user.id, partner_id]
+
     result = await db.execute(
-        select(Budget).where(Budget.user_id == user.id, Budget.month == month)
+        select(Budget).where(Budget.user_id.in_(user_ids), Budget.month == month)
     )
     budgets = result.scalars().all()
 
@@ -59,7 +67,7 @@ async def budget_alerts(
         spent_q = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0))
             .where(
-                Transaction.user_id == user.id,
+                Transaction.user_id.in_(user_ids),
                 Transaction.category_id == b.category_id,
                 Transaction.type == TransactionType.EXPENSE,
                 extract("year", Transaction.date) == int(year),
@@ -86,6 +94,7 @@ async def delete_budget(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Elimina un presupuesto propio."""
     result = await db.execute(select(Budget).where(Budget.id == budget_id, Budget.user_id == user.id))
     b = result.scalar_one_or_none()
     if not b:
